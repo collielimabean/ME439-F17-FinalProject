@@ -1,11 +1,14 @@
-INSTRUCTIONS TO RUN MOBILE ROBOTS FOR SCIENCE FAIR THINGY
+ME439 Fall 2017 Final Project
+=============================
 
-1) Open terminal: ctrl-alt-t
-2) Change directory to wherever the folder "Mobile_Robot" was placed: cd ~/Desktop/Mobile_Robot
-3) Run program: sudo python3 RobotControlClosedLoop_Solution.py
-	a) see below to change drawing
-4) Stop program when robot is done: ctrl-c 
-5) Look at plot: python3 LoadandPlot_Example.py
+Alex Boulanger, Alex Dixon, William Jen
+
+## Original Instructions
+1. Open terminal: ctrl-alt-t
+2. Change directory to wherever the folder "Mobile_Robot" was placed: `cd ~/Desktop/Mobile_Robot`
+3. Run program: `sudo python3 RobotControlClosedLoop_Solution.py`
+4. Stop program when robot is done: ctrl-c 
+5. Look at plot: `python3 LoadandPlot_Example.py`
 
 ADJUSTING PARAMETERS
 1) Open Spyder3
@@ -20,4 +23,3 @@ DRAWING IN INKSCAPE
 	b) Use Freehand (button on left side toolbar) to draw free hand
 		i) Cleanup freehand nodes by F1, F2, ctrl-l 1 or 2 times to reduce nodes
 4) Save drawing
-

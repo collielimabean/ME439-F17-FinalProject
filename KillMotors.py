@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 from pololu_drv8835_rpi import motors
 
 motors.motor1.setSpeed(0)

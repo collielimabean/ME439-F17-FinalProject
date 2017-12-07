@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
+import glob
 import pickle
 import matplotlib.pyplot as plt
-import glob
-
 
 # load pickle file
 # find the most recently created Dead Reckoning Pickle file

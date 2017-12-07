@@ -9,7 +9,7 @@ import time
 import pickle
 
 
-try: 
+try:
     # First turn off the motors
     motors.motor1.setSpeed(0)
     motors.motor2.setSpeed(0)
@@ -40,18 +40,9 @@ try:
     controller_right_velocity_rad_per_second = mc.PID_controller(motors.motor2, encoder_right.get_radians_velocity, 30,20,0,error_integral_limit=6,forward_motor_command_sign=-1)
     controller_right_velocity_meters_per_second = mc.PID_controller(motors.motor2, encoder_right.get_output_units_velocity, 900, 15000, 0, error_integral_limit=0.18,forward_motor_command_sign=-1)
     
-    # Select which controller to actually use
-#    active_controller_left = controller_left_position_radians
-#    active_controller_left = controller_left_position_meters
-#    active_controller_left = controller_left_velocity_rad_per_second
+    # Select controller
     active_controller_left = controller_left_velocity_meters_per_second
-    
-#    active_controller_right = controller_right_position_radians
-#    active_controller_right = controller_right_position_meters
-#    active_controller_right = controller_right_velocity_rad_per_second
     active_controller_right = controller_right_velocity_meters_per_second
-        
-    
 
     # Start the Controllers with reasonable targets (like 0)
     active_controller_left.set_target(0)
@@ -60,12 +51,13 @@ try:
     active_controller_left.start()
     active_controller_right.start()
     
-### RECOMMENDED INITIAL SPEED SETTINGS (If using a speed controller)
-### 2*np.pi  Radians per second
-### roughly 0.19 meters per second
+    ### RECOMMENDED INITIAL SPEED SETTINGS (If using a speed controller)
+    ### 2*np.pi  Radians per second
+    ### roughly 0.19 meters per second
     print("Controllers On")
-#    # NEXT program a series of maneuvers, e.g. Duration, Left_Speed, Right_Speed
-#    # And in the While loop, update to the next stage at the appropriate time.
+
+    # NEXT program a series of maneuvers, e.g. Duration, Left_Speed, Right_Speed
+    # And in the While loop, update to the next stage at the appropriate time.
     
     # Down and Back
     stage_settings = np.array([[1,0,0],robot0.plan_line(0.2, 0.5),robot0.plan_pivot(-1,-np.pi),robot0.plan_line(0.2, 0.5),robot0.plan_pivot(1,np.pi)])
@@ -102,23 +94,19 @@ try:
             active_controller_left.set_target(stage_settings[stage,1])
             active_controller_right.set_target(stage_settings[stage,2])
             t_stage_start = t_current # reset the stage start time to present
-#        print(active_controller_left.current, active_controller_left.target, active_controller_right.current, active_controller_right.target)
 
         robot0.update_encoders(encoder_left.output_units, encoder_right.output_units)
         robot0.dead_reckoning()
         
-# After finished, shut down the motors.         
+    # After finished, shut down the motors.         
     motors.motor1.setSpeed(0)
     motors.motor2.setSpeed(0)            
     
-# SAVE the Dead Reckoning data in a Pickle file. 
+    # SAVE the Dead Reckoning data in a Pickle file. 
     filename = "DeadReckData_{0}.p".format(time.strftime("%Y%m%d-%H_%M_%S"))
     pickle.dump(robot0, open(filename,"wb") )
     print("Dead Reckoning Data saved as:    {0}".format(filename))
-        
 
-
-            
 except KeyboardInterrupt: 
     motors.motor1.setSpeed(0)
     motors.motor2.setSpeed(0)
