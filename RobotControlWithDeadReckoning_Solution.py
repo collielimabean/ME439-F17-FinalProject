@@ -7,6 +7,7 @@ import ME439_Robot
 from pololu_drv8835_rpi import motors
 """
 
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -35,12 +36,16 @@ END_X = 1.22 # m
 END_Y = 2.12 # m
 
 # scaling factors
-ENDPOINT_SCALING_FACTOR = 1
-REPULSION_SCALING_FACTOR = 0.25
+ENDPOINT_SCALING_FACTOR = 4
+REPULSION_SCALING_FACTOR = 0.125
+
+# depending obstacles, we can get small relative vectors.
+# to keep things moving, require minimum magnitude
+MINIMUM_VECTOR_MAGNITUDE = 4
 
 # obstacle locations from lower left corner
 OBSTACLES = [
-    Obstacle(1, 1, 0.1)
+    Obstacle(0.5, 0.5, 0.1)
 ]
 
 def main():
@@ -62,7 +67,7 @@ def main():
         # if so, vector field is 0
         node_is_inside = False
         for obstacle in OBSTACLES:
-            if ((x_loc - obstacle.x) ** 2 + (y_loc - obstacle.y) ** 2) < obstacle.radius:
+            if (math.sqrt((x_loc - obstacle.x) ** 2 + (y_loc - obstacle.y) ** 2)) < obstacle.radius:
                 node_is_inside = True
                 break
 
@@ -92,6 +97,11 @@ def main():
 
         # set resultant vector
         #print(i, j, node_to_end, resultant_vector)
+        resultant_mag = np.linalg.norm(resultant_vector) 
+        if resultant_mag < MINIMUM_VECTOR_MAGNITUDE and not resultant_vector.any():
+            resultant_vector /= resultant_mag
+            resultant_vector *= MINIMUM_VECTOR_MAGNITUDE
+
         node_vectors[i, j] = resultant_vector
 
     # pull x/y components out for plotting
