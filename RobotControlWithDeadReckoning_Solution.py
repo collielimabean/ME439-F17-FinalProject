@@ -1,14 +1,123 @@
 #!/usr/bin/env python3
 
+"""
 import MotorControlArchitecture_v03 as mc
 import ME439_Sensors
 import ME439_Robot
 from pololu_drv8835_rpi import motors
+"""
+
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 import pickle
 
+# constants #
+#WORKSPACE_WIDTH = 1.22
+#WORKSPACE_LENGTH = 2.12
+#NODE_GRID_WIDTH = 100
+#NODE_GRID_LENGTH = 100
 
+class Node:
+    def __init__(self, node_x, node_y, number_nodes_x, number_nodes_y, actual_width, actual_length):
+        self.node_x = node_x
+        self.node_y = node_y
+        self.actual_x = (actual_width / number_nodes_x) * node_x
+        self.actual_y = (actual_length / number_nodes_y) * node_y
+        self.vector = np.array([0, 0])
+
+class Obstacle:
+    def __init__(self, node_x, node_y, number_nodes_x, number_nodes_y, actual_width, actual_length, radius):
+        self.node_x = node_x
+        self.node_y = node_y
+        self.actual_x = (actual_width / number_nodes_x) * node_x
+        self.actual_y = (actual_length / number_nodes_y) * node_y
+        self.radius = radius # m
+
+# configuration 
+workspace_width = 1.22 # m
+workspace_length = 2.12 # m
+
+node_grid_width = 25
+node_grid_length = 50
+
+start_x = 0
+start_y = 0
+
+end_node_x = node_grid_width - 1
+end_node_y = node_grid_length - 1
+
+endpoint_scaling_factor = 5.0
+repulsion_scaling_factor = 25.0
+
+# grid & obstacle initialization
+node_grid = [[Node(i, j, node_grid_width, node_grid_length, workspace_width, workspace_length) for j in range(node_grid_length)] for i in range(node_grid_width)]
+
+obstacles = [
+    Obstacle(15, 15, node_grid_width, node_grid_length, workspace_width, workspace_length, 0.01),
+    Obstacle(5, 25, node_grid_width, node_grid_length, workspace_width, workspace_length, 0.01),
+    Obstacle(17, 35, node_grid_width, node_grid_length, workspace_width, workspace_length, 0.01)
+]
+
+# compute vector field
+for i in range(len(node_grid)):
+    for j in range(len(node_grid[i])):
+        n = node_grid[i][j]
+
+        # initialization
+        resultant_vector = np.array([0.0, 0.0])
+
+        # check if node is on or inside a node
+        node_is_inside = False
+        for obstacle in obstacles:
+            if ((n.actual_x - obstacle.actual_x) ** 2 + (n.actual_y - obstacle.actual_y) ** 2) < obstacle.radius:
+                node_is_inside = True
+                break
+        
+        if node_is_inside:
+            continue
+
+        # normalize to unit vector & scale
+        node_to_end = np.array([end_node_x - i, end_node_y - j])
+
+        # verify that the vector is not (0, 0)
+        if node_to_end.any():
+            scaled_node_to_end_vector = (endpoint_scaling_factor / np.linalg.norm(node_to_end)) * node_to_end
+
+            #print '[%d, %d]: %s' % (i, j, str(scaled_node_to_end_vector))
+
+            # add node to endpoint vector to resultant
+            resultant_vector += scaled_node_to_end_vector
+
+        # for each obstacle, compute repulsion vector and add to resultant
+        for obstacle in obstacles:
+            obstacle_vector = np.array([i - obstacle.node_x, j - obstacle.node_y])
+
+            # verify vector is not (0, 0)
+            if obstacle_vector.any():
+                scaled_obstacle_vector = (repulsion_scaling_factor / (np.linalg.norm(obstacle_vector) ** 3)) * obstacle_vector
+                resultant_vector += scaled_obstacle_vector
+
+        # set the node object's vector
+        n.vector = resultant_vector
+
+# plot the vector field #
+# Y is at location 0, X is at 1
+X, Y = np.meshgrid(np.arange(0, node_grid_length), np.arange(0, node_grid_width))
+U = [[node.vector[1] for node in row] for row in node_grid]
+V = [[node.vector[0] for node in row] for row in node_grid]
+
+plt.figure()
+plt.title('some jank stuff')
+Q = plt.quiver(X, Y, U, V, units='width')
+plt.show()
+
+
+# determining correct commands to feed the robot as it travels #
+
+
+
+"""
 try:
     # First turn off the motors
     motors.motor1.setSpeed(0)
@@ -19,9 +128,10 @@ try:
     robot_sensors.start()
     
     # now set up a Robot object
-    wheel_width = 0.127
-    body_length = 0.155
-    robot0 = ME439_Robot.robot(wheel_width,body_length)
+    wheel_diameter = 0.0596 # m
+    wheel_width = 0.133 # m
+    body_length = 0.155 # m
+    robot0 = ME439_Robot.robot(wheel_width, body_length)
     
     # Choose which encoder is Left and Right    
     encoder_left = robot_sensors.encoder_0
@@ -61,15 +171,10 @@ try:
     
     # Down and Back
     stage_settings = np.array([[1,0,0],robot0.plan_line(0.2, 0.5),robot0.plan_pivot(-1,-np.pi),robot0.plan_line(0.2, 0.5),robot0.plan_pivot(1,np.pi)])
-    
-    # Letter "P"
-    stage_settings = np.array([[0.1,0,0],robot0.plan_pivot(-1,-np.pi/12), robot0.plan_line(0.3,1), robot0.plan_pivot(-1,-np.pi*5/12), robot0.plan_arc(-0.3,0.3,-np.pi), robot0.plan_line(0.3,0.15), robot0.plan_pivot(1,np.pi*5/12), robot0.plan_line(0.3,0.378834), robot0.plan_pivot(1,-np.pi*11/12)])
 
     stage = 0   # initialize in the 0th stage  
-    active_controller_left.set_target(stage_settings[stage,1])
-    active_controller_right.set_target(stage_settings[stage,2])
-    
-    print('Stage 0 set')
+    active_controller_left.set_target(stage_settings[stage, 1])
+    active_controller_right.set_target(stage_settings[stage, 2])
 
     t_stage_start = time.clock() # time.perf_counter() will give a reliable elapsed time. 
     
@@ -81,7 +186,6 @@ try:
         # Apparently this Delay is critical. I don't know why yet. 
         time.sleep(0.005)
         t_current = time.clock()
-#        print(t_current - t_stage_start)
         if (t_current-t_stage_start) >= stage_settings[stage,0]: 
             print('Time Detected')
             print(stage_settings[stage,:])
@@ -111,4 +215,4 @@ except KeyboardInterrupt:
     motors.motor1.setSpeed(0)
     motors.motor2.setSpeed(0)
     
-    
+"""    
