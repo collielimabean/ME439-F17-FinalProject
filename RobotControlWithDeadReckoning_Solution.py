@@ -12,109 +12,104 @@ import matplotlib.pyplot as plt
 import time
 import pickle
 
-# constants #
-#WORKSPACE_WIDTH = 1.22
-#WORKSPACE_LENGTH = 2.12
-#NODE_GRID_WIDTH = 100
-#NODE_GRID_LENGTH = 100
-
-class Node:
-    def __init__(self, node_x, node_y, number_nodes_x, number_nodes_y, actual_width, actual_length):
-        self.node_x = node_x
-        self.node_y = node_y
-        self.actual_x = (actual_width / number_nodes_x) * node_x
-        self.actual_y = (actual_length / number_nodes_y) * node_y
-        self.vector = np.array([0, 0])
-
 class Obstacle:
-    def __init__(self, node_x, node_y, number_nodes_x, number_nodes_y, actual_width, actual_length, radius):
-        self.node_x = node_x
-        self.node_y = node_y
-        self.actual_x = (actual_width / number_nodes_x) * node_x
-        self.actual_y = (actual_length / number_nodes_y) * node_y
-        self.radius = radius # m
+    def __init__(self, x, y, radius):
+        self.x = x
+        self.y = y
+        self.radius = radius
 
-# configuration 
-workspace_width = 1.22 # m
-workspace_length = 2.12 # m
+# location size
+WORKSPACE_WIDTH = 1.22 # m
+WORKSPACE_LENGTH = 2.12 # m
 
-node_grid_width = 25
-node_grid_length = 50
+# grid resolution
+NODE_GRID_WIDTH = 50
+NODE_GRID_LENGTH = 50
 
-start_x = 0
-start_y = 0
+# start position, (0, 0) is lower left corner
+START_X = 0 # m
+START_Y = 0 # m
 
-end_node_x = node_grid_width - 1
-end_node_y = node_grid_length - 1
+# end position (0, 0) is upper right corner
+END_X = 1.22 # m
+END_Y = 2.12 # m
 
-endpoint_scaling_factor = 5.0
-repulsion_scaling_factor = 25.0
+# scaling factors
+ENDPOINT_SCALING_FACTOR = 1
+REPULSION_SCALING_FACTOR = 0.25
 
-# grid & obstacle initialization
-node_grid = [[Node(i, j, node_grid_width, node_grid_length, workspace_width, workspace_length) for j in range(node_grid_length)] for i in range(node_grid_width)]
-
-obstacles = [
-    Obstacle(15, 15, node_grid_width, node_grid_length, workspace_width, workspace_length, 0.01),
-    Obstacle(5, 25, node_grid_width, node_grid_length, workspace_width, workspace_length, 0.01),
-    Obstacle(17, 35, node_grid_width, node_grid_length, workspace_width, workspace_length, 0.01)
+# obstacle locations from lower left corner
+OBSTACLES = [
+    Obstacle(1, 1, 0.1)
 ]
 
-# compute vector field
-for i in range(len(node_grid)):
-    for j in range(len(node_grid[i])):
-        n = node_grid[i][j]
+def main():
+    x_linspace = np.linspace(0, WORKSPACE_WIDTH, NODE_GRID_WIDTH)
+    y_linspace = np.linspace(0, WORKSPACE_LENGTH, NODE_GRID_LENGTH)
+    x_nodes, y_nodes = np.meshgrid(x_linspace, y_linspace)
 
-        # initialization
-        resultant_vector = np.array([0.0, 0.0])
+    # this is a 3D matrix. Instead of having matrix[i, j] being a 
+    # scalar value like 3, matrix[i, j] holds an array of size 2.
+    # in other words, each element in the matrix holds a vector
+    node_vectors = np.zeros((NODE_GRID_LENGTH, NODE_GRID_WIDTH, 2))
+    for (i, j) in np.ndindex(NODE_GRID_LENGTH, NODE_GRID_WIDTH):
+        x_loc = x_linspace[j]
+        y_loc = y_linspace[i]
+
+        resultant_vector = np.zeros(2)
 
         # check if node is on or inside a node
+        # if so, vector field is 0
         node_is_inside = False
-        for obstacle in obstacles:
-            if ((n.actual_x - obstacle.actual_x) ** 2 + (n.actual_y - obstacle.actual_y) ** 2) < obstacle.radius:
+        for obstacle in OBSTACLES:
+            if ((x_loc - obstacle.x) ** 2 + (y_loc - obstacle.y) ** 2) < obstacle.radius:
                 node_is_inside = True
                 break
-        
+
         if node_is_inside:
             continue
 
         # normalize to unit vector & scale
-        node_to_end = np.array([end_node_x - i, end_node_y - j])
+        node_to_end = np.array([END_X - x_loc, END_Y - y_loc])
 
         # verify that the vector is not (0, 0)
         if node_to_end.any():
-            scaled_node_to_end_vector = (endpoint_scaling_factor / np.linalg.norm(node_to_end)) * node_to_end
-
-            #print '[%d, %d]: %s' % (i, j, str(scaled_node_to_end_vector))
+            scale_factor = ENDPOINT_SCALING_FACTOR / np.linalg.norm(node_to_end)
+            scaled_node_to_end_vector = scale_factor * node_to_end
 
             # add node to endpoint vector to resultant
             resultant_vector += scaled_node_to_end_vector
 
         # for each obstacle, compute repulsion vector and add to resultant
-        for obstacle in obstacles:
-            obstacle_vector = np.array([i - obstacle.node_x, j - obstacle.node_y])
+        for obstacle in OBSTACLES:
+            obstacle_vector = np.array([x_loc - obstacle.x, y_loc - obstacle.y])
 
             # verify vector is not (0, 0)
             if obstacle_vector.any():
-                scaled_obstacle_vector = (repulsion_scaling_factor / (np.linalg.norm(obstacle_vector) ** 3)) * obstacle_vector
+                scale_factor = REPULSION_SCALING_FACTOR / (np.linalg.norm(obstacle_vector) ** 3)
+                scaled_obstacle_vector = scale_factor * obstacle_vector
                 resultant_vector += scaled_obstacle_vector
 
-        # set the node object's vector
-        n.vector = resultant_vector
+        # set resultant vector
+        #print(i, j, node_to_end, resultant_vector)
+        node_vectors[i, j] = resultant_vector
 
-# plot the vector field #
-# Y is at location 0, X is at 1
-X, Y = np.meshgrid(np.arange(0, node_grid_length), np.arange(0, node_grid_width))
-U = [[node.vector[1] for node in row] for row in node_grid]
-V = [[node.vector[0] for node in row] for row in node_grid]
+    # pull x/y components out for plotting
+    vector_field_x_comp = node_vectors[:, :, 0]
+    vector_field_y_comp = node_vectors[:, :, 1]
 
-plt.figure()
-plt.title('some jank stuff')
-Q = plt.quiver(X, Y, U, V, units='width')
-plt.show()
+    plt.figure()
+    plt.title('Vector Field')
+    plt.quiver(x_nodes, y_nodes, vector_field_x_comp, vector_field_y_comp, units='width')
+    plt.show()
 
 
-# determining correct commands to feed the robot as it travels #
+    # determining correct commands to feed the robot as it travels #
 
+
+
+if __name__ == '__main__':
+    main()
 
 
 """
