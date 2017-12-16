@@ -35,10 +35,14 @@ NODE_GRID_LENGTH = 50
 # start position, (0, 0) is lower left corner
 START_X = 0 # m
 START_Y = 0 # m
+START_THETA = 0 # 0 = straight up, radians?
 
 # end position (0, 0) is upper right corner
 END_X = 1.22 # m
 END_Y = 2.12 # m
+
+PIVOT_ANGULAR_SPEED = 0.05
+MAX_LINEAR_SPEED = 1
 
 # scaling factors
 ENDPOINT_SCALING_FACTOR = 4
@@ -46,7 +50,9 @@ REPULSION_SCALING_FACTOR = 0.125
 
 # depending on the obstacles, we can get vectors with small or magnitudes.
 # to keep things moving, we require a minimum magnitude
-MINIMUM_VECTOR_MAGNITUDE = 0
+MINIMUM_VECTOR_MAGNITUDE = 0.1
+
+MINIMUM_DISTANCE_THRESHOLD = 0.05
 
 # obstacle locations from lower left corner
 OBSTACLES = [
@@ -54,19 +60,108 @@ OBSTACLES = [
 ]
 
 
-def compute_stage_settings(robot, vector_field):
-    robot.set_position(0, 0, 0) # theta = ?
+class __sim_settings:
+    def __init__(self):
+        self.stage = 0
+        self.t_stage_start = 0
+        self.t_current = self.t_stage_start
 
-def run_simulation(robot, stage_settings, vector_field):
-    robot.set_position(0, 0, 0)
+def get_vector_from_current_position(robot, vector_field):
+    x = robot.x_estimated
+    y = robot.y_estimated
 
-    class __sim_test:
-        def __init__(self):
-            self.stage = 0
-            self.t_stage_start = 0
-            self.t_current = self.t_stage_start
+    # compute "closest" node 
+    x_index = int((x / WORKSPACE_WIDTH) * vector_field.shape[1])
+    y_index = int((y / WORKSPACE_LENGTH) * vector_field.shape[0])
 
-    sim_obj = __sim_test()
+    return vector_field[x_index, y_index]
+
+
+def compute_stage_settings(robot, vector_field): 
+    stage_settings = [[1, 0, 0]]
+
+    try:
+        states = ['pivot', 'line']
+
+        # dt is robot.dt
+        # x_estimated, y_exstimated, theta_estimated
+
+        current_state = 'pivot'
+
+        t_current = 0
+        t_stage_start = t_current
+        current_stage_setting = []
+
+        end_reached = False
+        while not end_reached:
+            curr_vector = get_vector_from_current_position(robot, vector_field)
+
+            # look at current_state, and set current_stage_setting
+            if current_state == 'pivot':
+                # compute new heading with reference to world
+                grid_heading = np.arctan2(curr_vector[1], curr_vector[0])
+                robot_heading = np.pi/2.0 + robot.theta_estimated
+                delta_heading = grid_heading - robot_heading
+
+                #print(grid_heading * 180/np.pi, robot_heading* 180/np.pi, delta_heading* 180/np.pi, robot.theta_estimated)
+
+                current_stage_setting = robot.plan_pivot(PIVOT_ANGULAR_SPEED, delta_heading)
+                print('pivot: ', grid_heading * 180/np.pi, delta_heading * 180/np.pi, robot.x_estimated, robot.y_estimated, robot.theta_estimated * 180/np.pi)
+
+
+            else: # line
+                # look at the magnitude, scale it to some reasonable speed
+                # magnitudes are 0 <= m <= 1
+                
+                #speed = min(np.linalg.norm(curr_vector) * 10, MAX_LINEAR_SPEED) 
+                speed = 0.1
+                distance = speed * robot.dt * 100
+                print('line: ', speed, distance, robot.x_estimated, robot.y_estimated, robot.theta_estimated)
+                current_stage_setting = robot.plan_line(speed, distance)
+
+            # execute current_stage_setting to completion
+            current_stage_setting_done = False
+            while not current_stage_setting_done:
+                t_current += robot.dt
+
+                # check if stage is done - if so, add to stage_settings
+                # and reset for next cycle
+                if t_current - t_stage_start >= current_stage_setting[0]:
+                    current_stage_setting_done = True
+                    stage_settings.append(current_stage_setting)
+                    current_stage_setting = []
+                    t_stage_start = t_current
+                    continue
+                
+                # set wheel speeds
+                robot.set_wheel_speed(current_stage_setting[1], current_stage_setting[2])
+                robot.update_state()
+
+            # check if we are done
+            
+            dist_away_from_goal = np.sqrt((robot.x_estimated - END_X) ** 2 + (robot.y_estimated - END_Y) ** 2)
+            if dist_away_from_goal <= MINIMUM_DISTANCE_THRESHOLD:
+                done = True
+            print('distance: ', dist_away_from_goal)
+            # compute next state
+            if current_state == 'pivot':
+                current_state = 'line'
+            else:
+                # XXX: for now, just go with pivot
+                current_state = 'pivot'
+    except Exception as e:
+        pass
+
+    # done with actual content, set a stop command 
+    stage_settings.append([1, 0, 0])
+    return stage_settings
+
+
+def run_stage_settings_only(robot, stage_settings):
+    robot.set_position(START_X, START_Y, START_THETA)
+
+    # plot the stage settings #
+    sim_obj = __sim_settings()
 
     def update_drawing(num, rbt, rbtline, pathline, sim_obj):
         rbt.update_state()
@@ -102,6 +197,46 @@ def run_simulation(robot, stage_settings, vector_field):
     except:
         pass
 
+def run_simulation(robot, vector_field):
+    robot.set_position(START_X, START_Y, START_THETA)
+    stage_settings = compute_stage_settings(robot, vector_field)
+
+    # plot the stage settings #
+    sim_obj = __sim_settings()
+
+    def update_drawing(num, rbt, rbtline, pathline, sim_obj):
+        rbt.update_state()
+        rbtline.set_data(rbt.corners_world_x,rbt.corners_world_y)
+        pathline.set_data(rbt.path_world_x, rbt.path_world_y)
+        
+        sim_obj.t_current += robot.dt     # time.time()
+        if (sim_obj.t_current - sim_obj.t_stage_start) >= stage_settings[sim_obj.stage, 0]:
+            sim_obj.stage += 1    
+            if sim_obj.stage >= stage_settings.shape[0]:    ## If it's done with all the stages, shut it down
+                sim_obj.stage = stage_settings.shape[0] - 1
+                rbt.set_wheel_speed(0, 0)    # Stop the robot
+            sim_obj.t_stage_start = sim_obj.t_current # reset the stage start time to present
+        
+        # Set the wheel speeds to the current stage, whatever it is
+        rbt.set_wheel_speed(stage_settings[sim_obj.stage, 1], stage_settings[sim_obj.stage, 2])
+        print(stage_settings[sim_obj.stage])
+        print("{} {}".format(rbt.x_center_world, rbt.y_center_world))
+        return rbtline, pathline
+    
+    fig1 = plt.figure()
+    robot0line, = plt.plot([], [], 'r-')
+    robot0path, = plt.plot([],[], 'b--')
+    plt.axis('equal')   # Note for some reason this has to come before the "xlim" and "ylim" or an explicit axis limits command "plt.axis([xmin,xmax,ymin,ymax])"
+    plt.xlim([0, WORKSPACE_WIDTH])
+    plt.ylim([0, WORKSPACE_LENGTH])
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('True Robot Path')
+    line_ani = animation.FuncAnimation(fig1, update_drawing, frames=1, fargs=(robot, robot0line, robot0path, sim_obj), interval= (robot.dt * 100), repeat=True, blit=False)
+    try:
+        plt.show()
+    except:
+        pass
 
 
 def run_actual():
@@ -172,10 +307,9 @@ def main():
     vector_field_x_comp = node_vectors[:, :, 0]
     vector_field_y_comp = node_vectors[:, :, 1]
 
-    #plt.figure()
-    #plt.title('Vector Field')
-    #plt.quiver(x_nodes, y_nodes, vector_field_x_comp, vector_field_y_comp, units='width')
-    #plt.show()
+    plt.figure()
+    plt.title('Vector Field')
+    plt.quiver(x_nodes, y_nodes, vector_field_x_comp, vector_field_y_comp, units='width')
 
     # now set up a Robot object
     wheel_diameter = 0.0596 # m
@@ -186,16 +320,15 @@ def main():
 
     stage_settings = np.array([
         [1,0,0], 
-        robot0.plan_line(0.2, 0.5),
-        robot0.plan_pivot(-1,-np.pi),
-        robot0.plan_line(0.2, 0.5),
         robot0.plan_pivot(1,np.pi),
         [1, 0, 0]
     ])
 
-    run_simulation(robot0, stage_settings, node_vectors)
+    #run_stage_settings_only(robot0, stage_settings)
+    #plt.show()
 
-
+    run_simulation(robot0, node_vectors)
+    plt.show()
     """
     try:
         # First turn off the motors
@@ -236,19 +369,6 @@ def main():
         # Start the Controllers with reasonable targets (like 0)
         active_controller_left.set_target(0)
         active_controller_right.set_target(0)
-        time.sleep(0.05)    # This short delay gives time for the encoder signals to update
-        active_controller_left.start()
-        active_controller_right.start()
-        
-        ### RECOMMENDED INITIAL SPEED SETTINGS (If using a speed controller)
-        ### 2*np.pi  Radians per second
-        ### roughly 0.19 meters per second
-        print("Controllers On")
-
-        # NEXT program a series of maneuvers, e.g. Duration, Left_Speed, Right_Speed
-        # And in the While loop, update to the next stage at the appropriate time.
-        
-        # Down and Back
         stage_settings = np.array([[1,0,0],robot0.plan_line(0.2, 0.5),robot0.plan_pivot(-1,-np.pi),robot0.plan_line(0.2, 0.5),robot0.plan_pivot(1,np.pi)])
 
         stage = 0   # initialize in the 0th stage  
