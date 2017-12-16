@@ -8,29 +8,11 @@ import numpy as np
 import time
 import math
 
-##%%  Note: I had to go into Tools--> Preferences --> IPython Console --> Graphics --> Backend --> Select "Tkinter"
-##%% also had to call FuncAnimation with "blit=False"
-#
-#def update_line(num, data, line):
-#    line.set_data(data[..., :num])
-#    return line,
-#
-#fig1 = plt.figure()
-#
-#data = np.random.rand(2, 25)
-#l, = plt.plot([], [], 'r-')
-#plt.xlim(0, 1)
-#plt.ylim(0, 1)
-#plt.xlabel('x')
-#plt.title('test')
-#
-#line_ani = animation.FuncAnimation(fig1, update_line, 25, fargs=(data, l), interval=500, blit=False)
-#plt.show()
-
-#%%  THIS IS THE ROBOT SIMULATOR
    
 class robot:
-    def __init__(self,wheel_width,body_length):
+    def __init__(self, wheel_width, body_length, dt):
+        self.dt = dt
+
         self.path_world_x = np.array([0])
         self.path_world_y = np.array([0])
         
@@ -239,8 +221,6 @@ class robot:
             # x_local is positive Inside the circle for Right turns, and Outside the circle for Left turns
             estimated_x_local = curve_sign*(np.sqrt(np.sum(np.square(estimated_xy_rel_to_circle_center))) - np.abs(path_segment_Rsigned) ) 
             estimated_theta_local = self.estimated_xytheta_history[-1,2] - estimated_path_theta
-        
-#        print([estimated_segment_completion_fraction])
 
         estimated_theta_local = fix_angle_pi_to_neg_pi(estimated_theta_local)
         self.estimated_x_local = estimated_x_local
@@ -288,13 +268,12 @@ class robot:
         # *****
         self.set_velocity_world_from_bf()  # convert the body-frame velocity of the robot into world-frame coordinates. 
         
-        self.x_center_world += dt * self.xdot_center_world   # simulates constant velocity toward +x
-        self.y_center_world += dt * self.ydot_center_world   # simulates constant velocity toward +y
-        self.theta += dt * self.thetadot      # simulates constant rotational speed (+z rotation)
+        self.x_center_world += self.dt * self.xdot_center_world   # simulates constant velocity toward +x
+        self.y_center_world += self.dt * self.ydot_center_world   # simulates constant velocity toward +y
+        self.theta += self.dt * self.thetadot      # simulates constant rotational speed (+z rotation)
         
         # Encoder values update
-#        self.update_encoders(self.left_wheel_speed, self.right_wheel_speed, dt)   # alternate form using explicit call with wheel speeds
-        self.simulate_encoders(dt)
+        self.simulate_encoders(self.dt)
         self.dead_reckoning()
         
         # this updates the path. 
@@ -348,13 +327,12 @@ def convert_stage_settings_to_path_specs(xytheta_init, stages, wheel_width):
     return paths
     
         
-def update_drawing(num, rbt,rbtline,pathline) :
+def update_drawing(num, rbt, rbtline, pathline) :
     global segment, Vmax, Beta, gamma
     
     try:
         # Check the path progress and set the robot controls accordingly
         rbt.compute_path_tracking_variables(path_specs[segment,:])
-#        print(np.append(robot0.estimated_xytheta_history[-1],robot0.estimated_segment_completion_fraction))
         # check if old segment is done. If so, switch to next segment. 
         if rbt.estimated_segment_completion_fraction > 1.0:
             segment += 1    
@@ -374,23 +352,6 @@ def update_drawing(num, rbt,rbtline,pathline) :
         rbt_path = plot_robot_path(rbt)
         raise
     
-
-# Old STAGE_SETTINGS version (time and wheel speed)    
-#    # Keep track of the time and increment by stage number as each stage elapses. 
-#    global stage, t_stage_start, t_current
-#    
-#    t_current += dt     # time.perf_counter()
-#    if (t_current-t_stage_start) >= stage_settings[stage,0]:
-#        stage += 1    
-#        if stage >= stage_settings.shape[0]:
-#            stage = stage_settings.shape[0] - 1
-#            rbt.set_wheel_speed(0,0)
-#        t_stage_start = t_current # reset the stage start time to present
-#    
-#    # Set the wheel speeds to the current stage, whatever it is
-#    rbt.set_wheel_speed(stage_settings[stage,1],stage_settings[stage,2])
-    
-#    print("{} {}".format(rbt.x_center_world,rbt.y_center_world))
     return rbtline, pathline
 
 def simulate_robot():
@@ -425,84 +386,3 @@ def plot_robot_path(rbt):
     plt.axis('equal')
     plt.show()
     return reconstructed_path
-    
-    
-##%%
-## *** HERE IS THE CODE THAT ACTUALLY DEFINES THE SCRIPT    
-## Create a robot and set its position. 
-#wheel_width = 0.127
-#body_length = 0.155
-#robot0 = robot(wheel_width,body_length)  # Parameters are the wheel width and body length. 
-#robot0.set_wheel_speed(0, 0)  # This will be overwritten by new computed commands almost immediately. 
-#
-#
-##%% STAGE SETTINGS for a time-and-wheel-speed controller
-## a sequence of wheel speed commands: 
-## each command has three parts: 
-## [duration_seconds, left_wheel_speed, right_wheel_speed] 
-#
-## SEVERAL EXAMPLES
-### These draw a line, forward and back:    
-##stage_settings = np.array( [ [0,0,0],[3,0.100,0.100],[1,0,0],[1,0.196,-0.196],[1,0,0],[3,0.100,0.100],[1,0,0],[1,-0.196,0.196],[1,0,0]])
-## Square with 1 m sides
-#stage_settings = np.array( [ [0,0,0],robot0.plan_line(0.3,1),robot0.plan_pivot(np.pi,np.pi/2),robot0.plan_line(0.3,1),robot0.plan_pivot(np.pi,np.pi/2),robot0.plan_line(0.3,1),robot0.plan_pivot(np.pi,np.pi/2),robot0.plan_line(0.3,1),robot0.plan_pivot(np.pi,np.pi/2),[0,0,0]])
-### Letter P: 
-##stage_settings = np.array( [ [0.1,0,0], robot0.plan_pivot(-1,-np.pi/12), robot0.plan_line(0.3,1), robot0.plan_pivot(-1, -np.pi*5/12), robot0.plan_arc(-0.3,0.3,-np.pi), robot0.plan_line(0.3,0.15), [0,0,0]])
-### Negative Speed and Negative Radius
-##stage_settings = np.array( [ [0,0,0], robot0.plan_arc(-3,-1,-1),[0,0,0]])
-### Positive Speed and Positive Radius
-##stage_settings = np.array( [ [0,0,0], robot0.plan_arc(3,1,1),[0,0,0]])
-### Positive Speed for 2 m in a straight line
-##stage_settings = np.array( [ [0,0,0], robot0.plan_line(0.3,2), [0,0,0]])
-##
-### initialize the current "stage" to be the first one (index 0)
-##stage = 0   # for Staged time & wheel speed control
-#
-#
-##%% PATH SETTINGS for a lines-and-circles controller
-## each segment is defined as an Arc with parameters: 
-## (Xorigin, Yorigin, Theta_init, Rsigned, Length)
-##- Xorigin and Yorigin are in the World frame
-##- Theta_init is in the World frame, measuring the angle of the intended ROBOT FORWARD 
-##   direction as a +z rotation from the +Yworld axis
-##- Rsigned should be + for Left turn, - for Right turn, or +/- infinity (np.inf (numpy.inf)) for a Line
-##- Extent is a path Arclength for this segment. (for a Line, the line's length)
-#
-## SEVERAL EXAMPLES - the last one active will be executed. 
-## GENERAL FUNCTION for converting from the "stage_settings" above: # path_specs = convert_stage_settings_to_path_specs(starting_xytheta_of_path, stage_settings, wheel_width_of_robot)
-#path_specs = convert_stage_settings_to_path_specs(np.array([0,0,0]),stage_settings,robot0.wheel_width)
-#
-## EXAMPLES of defining a path directly: 
-## 1 m circle starting at [0.5,0.5]
-#path_specs = np.array([[0.5,0.5,0,1,2*np.pi*1]])
-## 1 m circle starting at [-2,-2]
-#path_specs = np.array([[-2,-2,0,1,2*np.pi*1]])
-### line from [0,-1] to [0,-0.1] 
-### ** STUDENTS: THINK ABOUT WHY THIS BEHAVES ODDLY
-##path_specs = np.array([[0,-1,0,np.inf,0.9]])
-#
-#
-## interesting BUG demo: can't draw two circles
-#path_specs = np.array([[0,0,0,np.inf,1],[0,1,-np.pi/2,np.inf,3], [3,1,-np.pi,np.inf,1], [3,0,np.pi/2,np.inf,0.5],[2.5,0,np.pi/2,0.5,2*np.pi*0.5],[2.5,0,np.pi/2,np.inf,2],[0.5,0,np.pi/2,0.5,2*np.pi*0.5], [0.5,0,np.pi/2,np.inf,0.5]])
-#
-#
-## TUNABLE CONTROL PARAMETERS
-#Vmax = 0.3  # Maximum allowed speed
-#Beta = 2  # gain for Lateral correction speed
-#gamma = 10  # gain for Angular correction speed
-#
-#
-##SET UP INITIAL CONDITIONS: 
-## The simulation of the robot will start here. 
-#robot0.set_position(0,0,0)  # (x,y,theta)
-## the Dead-reckoning estimate of robot position will start here. 
-#robot0.set_estimated_position(0,0,0)  # (x_estimated,y_estimated,theta_estimated)
-## initialize the current "segment" to be the first one (index 0) # (you could skip segments if you wanted to)
-#segment = 0  # for Segmented path following
-#
-## RUN THE SIMULATION. 
-#robot0_animation = simulate_robot()
-#
-#
-#
-#    
