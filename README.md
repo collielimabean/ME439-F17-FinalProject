@@ -1,25 +1,43 @@
-ME439 Fall 2017 Final Project
-=============================
+ME439 Fall 2017 Final Project: Vector Field Potential Path Planning
+===================================================================
 
 Alex Boulanger, Alex Dixon, William Jen
 
-## Original Instructions
-1. Open terminal: ctrl-alt-t
-2. Change directory to wherever the folder "Mobile_Robot" was placed: `cd ~/Desktop/Mobile_Robot`
-3. Run program: `sudo python3 RobotControlClosedLoop_Solution.py`
-4. Stop program when robot is done: ctrl-c 
-5. Look at plot: `python3 LoadandPlot_Example.py`
+## Introduction
+The vector field potential is a path-planning algorithm. In other words,
+given a map of all the obstacles, create a path that will get the robot from 
+point A to point B. This is done by giving the end point B a "pull" and each
+obstacle a "repelling" force.
 
-ADJUSTING PARAMETERS
-1) Open Spyder3
-2) Open RobotControlClosedLoop_Solution
-3) Vmax, Beta, and Gamma are at the top. Best configuration so far (0.6, 8, 4)
+## Running
+* Simulation: `sudo python3 VectorField.py sim`.
+* Actual hardware: `sudo python3 VectorField.py`
 
-DRAWING IN INKSCAPE
-1) Right click on SVGTest and open in Inkscape
-2) Highlight drawing (with arrow tool) and delete
-3) Add new drawing
-	a) Use Bezier curves (button on left side toolbar) to plot points for path, ENTER to finish drawing
-	b) Use Freehand (button on left side toolbar) to draw free hand
-		i) Cleanup freehand nodes by F1, F2, ctrl-l 1 or 2 times to reduce nodes
-4) Save drawing
+You may also omit the "sim" argument if you are not on the RPi - the program will detect if the hardware libraries are not available and run the simulation instead.
+
+## Parameters
+This vector field algorithm has multiple parameters with which to change the 
+behavior. They are specified below.
+
+* Robot dimensions (`WHEEL_WIDTH` and `BODY_LENGTH`)
+* Timestep (`DELTA_T`)
+* Workspace dimensions (`WORKSPACE_WIDTH` and `WORKSPACE_LENGTH`)
+* Vector field resolution (`NODE_GRID_LENGTH` and `NODE_GRID_WIDTH`)
+* Vector field scaling factors (`ENDPOINT_SCALING_FACTOR`, `REPULSION_SCALING_FACTOR`):
+	These control the magnitude of the obstacle repulsion and the
+	endpoint pull vector.
+* Minimum vector field magnitude (`MINIMUM_VECTOR_MAGNITUDE`): Some
+	vectors may be very small due to the obstacle and end point vectors
+	cancelling to some degree. This value forces those small vectors
+	to have the specified minimum magnitude.
+* Initial robot pose (`START_X`, `START_Y`, `START_THETA`). 
+	Note that `START_THETA`is referenced off the +y axis (i.e. 0 is
+	straight up)
+* End robot position (`END_X`, `END_Y`)
+* Robot speeds (`PIVOT_ANGULAR_SPEED`, `LINEAR_SPEED`)
+* End point tolerance (`MINIMUM_DISTANCE_THRESHOLD`) 
+* Robot headling alignment tolerance (`CORRECT_HEADING_THRESHOLD`):
+	To reduce motion jerkiness, this angle tells the robot when to pivot
+	to correct its heading
+* Obstacle list (`OBSTACLES`)
+

@@ -32,6 +32,13 @@ class __sim_settings:
         self.t_stage_start = 0
         self.t_current = self.t_stage_start
 
+# robot dimensions
+WHEEL_WIDTH = 0.133 # m
+BODY_LENGTH = 0.155 # m
+
+# timestep
+DELTA_T = 0.01
+
 # location size
 WORKSPACE_WIDTH = 1.22 # m
 WORKSPACE_LENGTH = 2.12 # m
@@ -49,19 +56,23 @@ START_THETA = 0 # 0 = straight up, radians?
 END_X = 1.22 # m
 END_Y = 2.12 # m
 
+# speed settings
 PIVOT_ANGULAR_SPEED = 0.5
 LINEAR_SPEED = 0.5
 
-# scaling factors
+# scaling factors for vector field
 ENDPOINT_SCALING_FACTOR = 4
-REPULSION_SCALING_FACTOR = 0.125
+REPULSION_SCALING_FACTOR = 0.375
 
 # depending on the obstacles, we can get vectors with small or magnitudes.
 # to keep things moving, we require a minimum magnitude
 MINIMUM_VECTOR_MAGNITUDE = 0.1
 
+# "close enough" distance to the end
 MINIMUM_DISTANCE_THRESHOLD = 0.1
 
+# allow the robot to deviate slightly from the grid heading
+# prevents robot from pivoting a lot = less jerky movement
 CORRECT_HEADING_THRESHOLD = np.radians(1)
 
 # obstacle locations from lower left corner
@@ -71,9 +82,9 @@ OBSTACLES = [
 ]
 
 def get_vector_from_current_position(x, y, vector_field):
-    x_index = int((x / WORKSPACE_WIDTH) * vector_field.shape[1])
-    y_index = int((y / WORKSPACE_LENGTH) * vector_field.shape[0])
-    return vector_field[y_index, x_index]
+    x_index = np.around((x / WORKSPACE_WIDTH) * vector_field.shape[1])
+    y_index = np.around((y / WORKSPACE_LENGTH) * vector_field.shape[0])
+    return vector_field[int(y_index), int(x_index)]
 
 
 def compute_stage_settings(robot, vector_field):
@@ -111,8 +122,8 @@ def compute_stage_settings(robot, vector_field):
 
             print("X: {} | Y: {} | Theta: {} | Grid: {} | Delta H: {} | Distance: {}".format(curr_x, curr_y, np.degrees(curr_theta), np.degrees(grid_heading), np.degrees(delta_heading), dist_away_from_goal))
     except:
-        print('exception!')
-    
+        traceback.print_exc()
+
     stage_settings.append([1, 0, 0])
     return np.array(stage_settings)
 
@@ -159,7 +170,6 @@ def run_stage_settings_only(robot, stage_settings, fig):
         pass
 
 def run_simulation(robot, vector_field, fig):
-    robot.set_position(START_X, START_Y, START_THETA)
     stage_settings = compute_stage_settings(robot, vector_field)
     print(stage_settings)
     run_stage_settings_only(robot, stage_settings, fig)
@@ -231,12 +241,17 @@ def main():
     fig = plt.figure()
     plt.quiver(x_nodes, y_nodes, vector_field_x_comp, vector_field_y_comp, units='width')
 
+    # plot circles representing the obstacles - vector field is quite liberal with boundaries
+    ax = fig.gca()
+    for obstacle in OBSTACLES:
+        ax.add_artist(plt.Circle(
+            (obstacle.x, obstacle.y),
+            obstacle.radius,
+            color='g'))
+
     # now set up a Robot object
-    wheel_diameter = 0.0596 # m
-    wheel_width = 0.133 # m
-    body_length = 0.155 # m
-    dt = 0.01
-    robot0 = ME439_Robot.robot(wheel_width, body_length, dt)
+    robot0 = ME439_Robot.robot(WHEEL_WIDTH, BODY_LENGTH, DELTA_T)
+    robot0.set_position(START_X, START_Y, START_THETA)
 
     # simulation #
     if SIMULATE or (len(sys.argv) >= 2 and sys.argv[1] == 'sim'):
@@ -245,37 +260,37 @@ def main():
 
     # the real thing #
     try:
+        stage_settings = compute_stage_settings(robot0, node_vectors)
+
         # First turn off the motors
         motors.motor1.setSpeed(0)
         motors.motor2.setSpeed(0)
-        
+
         # now get a "ME439_Sensors.sensor_suite" object. 
         robot_sensors = ME439_Sensors.sensor_suite(saveFile=0)
         robot_sensors.start()
-        
-        # now set up a Robot object
-        wheel_diameter = 0.0596 # m
-        wheel_width = 0.133 # m
-        body_length = 0.155 # m
-        robot0 = ME439_Robot.robot(wheel_width, body_length)
-        
+
         # Choose which encoder is Left and Right    
         encoder_left = robot_sensors.encoder_0
         encoder_right = robot_sensors.encoder_1
-        
+
         # Set up a variety of controllers you could use. Note the PID settings!
         # Several template controllers - Left wheel
-        controller_left_position_radians = mc.PID_controller(motors.motor1, encoder_left.get_radians, 200,0,0,error_integral_limit=np.inf,forward_motor_command_sign=1)
-        controller_left_position_meters = mc.PID_controller(motors.motor1, encoder_left.get_output_units, 6000,0,0,error_integral_limit=np.inf,forward_motor_command_sign=1)
-        controller_left_velocity_rad_per_second = mc.PID_controller(motors.motor1, encoder_left.get_radians_velocity, 30,20,0,error_integral_limit=6,forward_motor_command_sign=1)
-        controller_left_velocity_meters_per_second = mc.PID_controller(motors.motor1, encoder_left.get_output_units_velocity, 900, 15000, 0, error_integral_limit=0.18,forward_motor_command_sign=1)
-        
+        controller_left_velocity_meters_per_second = mc.PID_controller(
+            motors.motor1,
+            encoder_left.get_output_units_velocity,
+            900, 15000, 0,
+            error_integral_limit=0.18,
+            forward_motor_command_sign=1)
+
         # Several template controllers - Right wheel
-        controller_right_position_radians = mc.PID_controller(motors.motor2, encoder_right.get_radians, 200,0,0,error_integral_limit=np.inf,forward_motor_command_sign=-1)
-        controller_right_position_meters = mc.PID_controller(motors.motor2, encoder_right.get_output_units, 6000,0,0,error_integral_limit=np.inf,forward_motor_command_sign=-1)
-        controller_right_velocity_rad_per_second = mc.PID_controller(motors.motor2, encoder_right.get_radians_velocity, 30,20,0,error_integral_limit=6,forward_motor_command_sign=-1)
-        controller_right_velocity_meters_per_second = mc.PID_controller(motors.motor2, encoder_right.get_output_units_velocity, 900, 15000, 0, error_integral_limit=0.18,forward_motor_command_sign=-1)
-        
+        controller_right_velocity_meters_per_second = mc.PID_controller(
+            motors.motor2,
+            encoder_right.get_output_units_velocity,
+            900, 15000, 0,
+            error_integral_limit=0.18,
+            forward_motor_command_sign=-1)
+
         # Select controller
         active_controller_left = controller_left_velocity_meters_per_second
         active_controller_right = controller_right_velocity_meters_per_second
@@ -283,37 +298,35 @@ def main():
         # Start the Controllers with reasonable targets (like 0)
         active_controller_left.set_target(0)
         active_controller_right.set_target(0)
-        stage_settings = np.array([[1,0,0],robot0.plan_line(0.2, 0.5),robot0.plan_pivot(-1,-np.pi),robot0.plan_line(0.2, 0.5),robot0.plan_pivot(1,np.pi)])
 
-        stage = 0   # initialize in the 0th stage  
+        stage = 0   # initialize in the 0th stage
         active_controller_left.set_target(stage_settings[stage, 1])
         active_controller_right.set_target(stage_settings[stage, 2])
 
-        t_stage_start = time.clock() # time.perf_counter() will give a reliable elapsed time. 
-        
-        # loop to continually execute the controller: 
-        while True:
-            # Maybe do things like checking the time or the displacement and updating the settings. 
+        t_stage_start = time.clock() # time.perf_counter() will give a reliable elapsed time.
 
-            # Apparently this Delay is critical. I don't know why yet. 
+        # loop to continually execute the controller:
+        while True:
             time.sleep(0.005)
             t_current = time.clock()
-            if (t_current-t_stage_start) >= stage_settings[stage,0]: 
+
+            if (t_current - t_stage_start) >= stage_settings[stage, 0]: 
                 print('Time Detected')
                 print(stage_settings[stage,:])
                 stage += 1   
-                if stage >= stage_settings.shape[0]:    # If the stage is set to a higher number than exists...then shut down and exit
+                if stage >= stage_settings.shape[0]:
                     stage = stage_settings.shape[0] - 1
                     active_controller_left.set_target(0)
                     active_controller_right.set_target(0)
                     break
+
                 active_controller_left.set_target(stage_settings[stage,1])
                 active_controller_right.set_target(stage_settings[stage,2])
                 t_stage_start = t_current # reset the stage start time to present
 
             robot0.update_encoders(encoder_left.output_units, encoder_right.output_units)
             robot0.dead_reckoning()
-            
+
         # After finished, shut down the motors.         
         motors.motor1.setSpeed(0)
         motors.motor2.setSpeed(0)            
