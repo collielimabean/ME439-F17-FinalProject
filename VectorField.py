@@ -175,6 +175,7 @@ def run_simulation(robot, vector_field, fig):
     run_stage_settings_only(robot, stage_settings, fig)
 
 def main():
+    print('Computing vector field...')
     x_linspace = np.linspace(0, WORKSPACE_WIDTH, NODE_GRID_WIDTH)
     y_linspace = np.linspace(0, WORKSPACE_LENGTH, NODE_GRID_LENGTH)
     x_nodes, y_nodes = np.meshgrid(x_linspace, y_linspace)
@@ -249,6 +250,8 @@ def main():
             obstacle.radius,
             color='g'))
 
+    print('Vector field done.')
+
     # now set up a Robot object
     robot0 = ME439_Robot.robot(WHEEL_WIDTH, BODY_LENGTH, DELTA_T)
     robot0.set_position(START_X, START_Y, START_THETA)
@@ -260,7 +263,11 @@ def main():
 
     # the real thing #
     try:
-        stage_settings = compute_stage_settings(robot0, node_vectors)
+        #stage_settings = compute_stage_settings(robot0, node_vectors)
+
+        stage_settings = np.array([
+            [1, 0, 0], [2, 1, 1], [1, 0, 0]
+        ])
 
         # First turn off the motors
         motors.motor1.setSpeed(0)
@@ -298,6 +305,9 @@ def main():
         # Start the Controllers with reasonable targets (like 0)
         active_controller_left.set_target(0)
         active_controller_right.set_target(0)
+        time.sleep(0.05)
+        active_controller_left.start()
+        active_controller_right.start()
 
         stage = 0   # initialize in the 0th stage
         active_controller_left.set_target(stage_settings[stage, 1])
@@ -312,7 +322,7 @@ def main():
 
             if (t_current - t_stage_start) >= stage_settings[stage, 0]: 
                 print('Time Detected')
-                print(stage_settings[stage,:])
+                print(stage_settings[stage, :])
                 stage += 1   
                 if stage >= stage_settings.shape[0]:
                     stage = stage_settings.shape[0] - 1
@@ -320,9 +330,9 @@ def main():
                     active_controller_right.set_target(0)
                     break
 
-                active_controller_left.set_target(stage_settings[stage,1])
-                active_controller_right.set_target(stage_settings[stage,2])
-                t_stage_start = t_current # reset the stage start time to present
+            active_controller_left.set_target(stage_settings[stage, 1])
+            active_controller_right.set_target(stage_settings[stage, 2])
+            t_stage_start = t_current # reset the stage start time to present
 
             robot0.update_encoders(encoder_left.output_units, encoder_right.output_units)
             robot0.dead_reckoning()
