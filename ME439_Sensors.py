@@ -40,8 +40,8 @@ class sensor_suite (threading.Thread):
         shaft_radians_to_output_units_ratio = 0.030 # 1 radian makes this many linear meters
         
         #Encoder object instantiation:  quadrature_encoder(serial_string_identifier, counts_per_encoder_revolution, output_gear_reduction_ratio, shaft_radians_to_output_units_ratio, forward_encoder_rotation_sign)
-        self.encoder_0 = mc.quadrature_encoder("E0",counts_per_encoder_revolution, encoder_to_output_shaft_multiplier, shaft_radians_to_output_units_ratio, 1)
-        self.encoder_1 = mc.quadrature_encoder("E1",counts_per_encoder_revolution, encoder_to_output_shaft_multiplier, shaft_radians_to_output_units_ratio, -1)
+        self.encoder_0 = mc.quadrature_encoder("E0",counts_per_encoder_revolution, encoder_to_output_shaft_multiplier, shaft_radians_to_output_units_ratio, -1)
+        self.encoder_1 = mc.quadrature_encoder("E1",counts_per_encoder_revolution, encoder_to_output_shaft_multiplier, shaft_radians_to_output_units_ratio, 1)
         
 
 

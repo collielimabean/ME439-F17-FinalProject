@@ -278,21 +278,21 @@ def main():
         robot_sensors.start()
 
         # Choose which encoder is Left and Right    
-        encoder_left = robot_sensors.encoder_0
-        encoder_right = robot_sensors.encoder_1
+        encoder_left = robot_sensors.encoder_1
+        encoder_right = robot_sensors.encoder_0
 
         # Set up a variety of controllers you could use. Note the PID settings!
         # Several template controllers - Left wheel
         controller_left_velocity_meters_per_second = mc.PID_controller(
-            motors.motor1,
+            motors.motor2,
             encoder_left.get_output_units_velocity,
             900, 15000, 0,
             error_integral_limit=0.18,
-            forward_motor_command_sign=1)
+            forward_motor_command_sign=-1)
 
         # Several template controllers - Right wheel
         controller_right_velocity_meters_per_second = mc.PID_controller(
-            motors.motor2,
+            motors.motor1,
             encoder_right.get_output_units_velocity,
             900, 15000, 0,
             error_integral_limit=0.18,
@@ -316,7 +316,8 @@ def main():
         t_stage_start = time.clock() # time.perf_counter() will give a reliable elapsed time.
 
         # loop to continually execute the controller:
-        while True:
+        done = False
+        while not done:
             time.sleep(0.005)
             t_current = time.clock()
 
@@ -324,28 +325,28 @@ def main():
                 print('Time Detected')
                 print(stage_settings[stage, :])
                 stage += 1   
+                print(stage)
                 if stage >= stage_settings.shape[0]:
-                    stage = stage_settings.shape[0] - 1
+                    print('terminating...')
+                    #stage = stage_settings.shape[0] - 1
                     active_controller_left.set_target(0)
                     active_controller_right.set_target(0)
-                    break
-
-            active_controller_left.set_target(stage_settings[stage, 1])
-            active_controller_right.set_target(stage_settings[stage, 2])
-            t_stage_start = t_current # reset the stage start time to present
-
+                    done = True
+                    continue
+                t_stage_start = t_current # reset the stage start time to present
+                active_controller_left.set_target(stage_settings[stage, 1])
+                active_controller_right.set_target(stage_settings[stage, 2])
+            
             robot0.update_encoders(encoder_left.output_units, encoder_right.output_units)
             robot0.dead_reckoning()
 
-        # After finished, shut down the motors.         
+        # After finished, shut down the motors.        
         motors.motor1.setSpeed(0)
-        motors.motor2.setSpeed(0)            
-        
+        motors.motor2.setSpeed(0)
         # SAVE the Dead Reckoning data in a Pickle file. 
-        filename = "DeadReckData_{0}.p".format(time.strftime("%Y%m%d-%H_%M_%S"))
-        pickle.dump(robot0, open(filename,"wb") )
-        print("Dead Reckoning Data saved as:    {0}".format(filename))
-
+        #filename = "DeadReckData_{0}.p".format(time.strftime("%Y%m%d-%H_%M_%S"))
+        #pickle.dump(robot0, open(filename,"wb") )
+        #print("Dead Reckoning Data saved as:    {0}".format(filename))
     except Exception: 
         traceback.print_exc()
         try:
