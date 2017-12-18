@@ -9,6 +9,7 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 import ME439_Robot
+from ME439_Robot import plot_robot_path 
 
 SIMULATE = False
 
@@ -58,7 +59,7 @@ END_Y = 2.12 # m
 
 # speed settings
 PIVOT_ANGULAR_SPEED = 0.5
-LINEAR_SPEED = 0.5
+LINEAR_SPEED = 0.1
 
 # scaling factors for vector field
 ENDPOINT_SCALING_FACTOR = 4
@@ -263,11 +264,7 @@ def main():
 
     # the real thing #
     try:
-        #stage_settings = compute_stage_settings(robot0, node_vectors)
-
-        stage_settings = np.array([
-            [1, 0, 0], [2, 1, 1], [1, 0, 0]
-        ])
+        stage_settings = compute_stage_settings(robot0, node_vectors)
 
         # First turn off the motors
         motors.motor1.setSpeed(0)
@@ -343,10 +340,8 @@ def main():
         # After finished, shut down the motors.        
         motors.motor1.setSpeed(0)
         motors.motor2.setSpeed(0)
-        # SAVE the Dead Reckoning data in a Pickle file. 
-        #filename = "DeadReckData_{0}.p".format(time.strftime("%Y%m%d-%H_%M_%S"))
-        #pickle.dump(robot0, open(filename,"wb") )
-        #print("Dead Reckoning Data saved as:    {0}".format(filename))
+        plot_robot_path(robot0)
+        plt.show()
     except Exception: 
         traceback.print_exc()
         try:

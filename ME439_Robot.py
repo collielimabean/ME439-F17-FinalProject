@@ -380,7 +380,6 @@ def simulate_robot():
 
     
 def plot_robot_path(rbt):
-    #%% Plot the resulting dead reckoning data
     f = plt.figure()
     reconstructed_path, = plt.plot(rbt.estimated_xytheta_history[:,0], rbt.estimated_xytheta_history[:,1])
     plt.axis('equal')
